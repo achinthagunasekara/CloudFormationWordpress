@@ -103,10 +103,6 @@ Resources:
                   FromPort: 80
                   ToPort: 80
                   SourceSecurityGroupId: !Ref ElbSecurityGroup
-                - IpProtocol: tcp
-                  FromPort: 22
-                  ToPort: 22
-                  CidrIp: 0.0.0.0/0
     DBEC2SecurityGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
