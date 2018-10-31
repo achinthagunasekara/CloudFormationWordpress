@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: This template creates a wordpress simple wordpress site.
+Description: This template creates a simple wordpress site.
 Parameters:
     VpcId:
         Type: AWS::EC2::VPC::Id
