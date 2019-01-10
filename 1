@@ -1,0 +1,26 @@
+Comments clean up
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# On branch master
+# Your branch is up to date with 'origin/master'.
+#
+# Changes to be committed:
+#	modified:   wordpress.yml
+#
+# ------------------------ >8 ------------------------
+# Do not modify or remove the line above.
+# Everything below it will be ignored.
+diff --git a/wordpress.yml b/wordpress.yml
+index a962edd..80463a3 100644
+--- a/wordpress.yml
++++ b/wordpress.yml
+@@ -8,7 +8,7 @@ Parameters:
+     Subnets:
+         Type: CommaDelimitedList
+         Description: The list of subnet IDs in above VPC
+-        ConstraintDescription: must be a list of at least two existing subnets associated with     at least two different availability zones
++        ConstraintDescription: must be a list of at least two existing subnets associated with at least two different availability zones
+     DBUser:
+         Description: The WordPress database admin account username
+         Type: String

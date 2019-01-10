@@ -253,6 +253,7 @@ Resources:
                     umount /tmp/efs
                     mount -t nfs4 $EFS:/ /var/www/html/wp-content/
                     chown -R apache:root /var/www/html/
+                    # If using RHEL 7 or CentOS 7, please use systemctl (This is for Amazon Linux)
                     chkconfig httpd --add
                     /etc/init.d/httpd restart
                     /opt/aws/bin/cfn-signal -e $? --stack '${AWS::StackName}' --region ${AWS::Region} --resource 'AppAsg'
