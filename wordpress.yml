@@ -104,10 +104,11 @@ Resources:
                   FromPort: 80
                   ToPort: 80
                   SourceSecurityGroupId: !Ref ElbSecurityGroup
-                - IpProtocol: tcp
-                  FromPort: 22
-                  ToPort: 22
-                  CidrIp: 0.0.0.0/0
+                # Only uncomment if you want to do any debuging on the box
+                # - IpProtocol: tcp
+                #   FromPort: 22
+                #   ToPort: 22
+                #   CidrIp: 0.0.0.0/0
     MountTargetSecurityGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
