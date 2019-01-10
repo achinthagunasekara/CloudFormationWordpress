@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: This template creates a simple wordpress site.
+Description: This template creates a wordpress simple wordpress site.
 Parameters:
     VpcId:
         Type: AWS::EC2::VPC::Id
@@ -21,6 +21,7 @@ Parameters:
         MaxLength: 41
         AllowedPattern: '[a-zA-Z0-9]*'
         ConstraintDescription: Must contain only alphanumeric characters
+        Default: dbpassword1234
     DBClass:
         Description: Database instance class
         Type: String
@@ -103,6 +104,20 @@ Resources:
                   FromPort: 80
                   ToPort: 80
                   SourceSecurityGroupId: !Ref ElbSecurityGroup
+                - IpProtocol: tcp
+                  FromPort: 22
+                  ToPort: 22
+                  CidrIp: 0.0.0.0/0
+    MountTargetSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Security group for mount target
+            VpcId: !Ref VpcId
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 2049
+                  ToPort: 2049
+                  SourceSecurityGroupId: !Ref AppServerSecurityGroup
     DBEC2SecurityGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
@@ -113,12 +128,47 @@ Resources:
                   FromPort: 3306
                   ToPort: 3306
                   SourceSecurityGroupId: !Ref AppServerSecurityGroup
+    AppServerRole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                    -
+                        Effect: Allow
+                        Principal:
+                            Service:
+                                - ec2.amazonaws.com
+                        Action:
+                            - sts:AssumeRole
+            Path: /
+    AppServerRolePolicies:
+        Type: "AWS::IAM::Policy"
+        Properties:
+            PolicyName: "AppServerRolePolicy"
+            PolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                    -
+                        Effect: "Allow"
+                        Action:
+                            - elasticfilesystem:DescribeMountTargets
+                        Resource: "*"
+            Roles:
+                -
+                    Ref: "AppServerRole"
+    AppServerInstanceProfile:
+        Type: AWS::IAM::InstanceProfile
+        Properties:
+            Path: /
+            Roles:
+                - !Ref AppServerRole
     DBSubnetGroup:
         Type: AWS::RDS::DBSubnetGroup
         Properties:
             DBSubnetGroupDescription: DB subnet group for the DB instance
             DBSubnetGroupName: !Join
-                - ''
+                - '-'
                 - - !Ref AWS::StackName
                   - DBSubnetGroup
             SubnetIds: !Ref Subnets
@@ -141,7 +191,7 @@ Resources:
             SecurityGroups:
                 - !Ref ElbSecurityGroup
             Subnets: !Ref Subnets
-            Scheme: internal
+            Scheme: internet-facing
             Listeners:
                 - LoadBalancerPort: 80
                   Protocol: HTTP
@@ -152,19 +202,39 @@ Resources:
                 UnhealthyThreshold: 5
                 Interval: 30
                 Timeout: 5
+    FileSystem:
+        Type: AWS::EFS::FileSystem
+        Properties:
+            PerformanceMode: generalPurpose
+            FileSystemTags:
+                - Key: Name
+                  Value: !Join
+                      - '-'
+                      - - !Ref AWS::StackName
+                        - FileSystem
+    MountTarget:
+        Type: AWS::EFS::MountTarget
+        Properties:
+            FileSystemId: !Ref FileSystem
+            SubnetId: !Select
+                - 0
+                - !Ref Subnets
+            SecurityGroups:
+                - !Ref MountTargetSecurityGroup
     AppLc:
         Type: AWS::AutoScaling::LaunchConfiguration
         Properties:
             KeyName: !Ref KeyName
+            IamInstanceProfile: !Ref AppServerInstanceProfile
             ImageId: !Ref ImageId
             SecurityGroups:
                 - !Ref AppServerSecurityGroup
             InstanceType: !Ref InstanceType
-            AssociatePublicIpAddress: false
+            AssociatePublicIpAddress: true
             UserData:
                 Fn::Base64: !Sub |
                     #!/bin/bash -x
-                    yum install -y php php-mysql mysql httpd
+                    yum install -y php php-mysql mysql httpd jq
                     cd /tmp
                     wget https://github.com/WordPress/WordPress/archive/${WordpressVersion}.zip
                     unzip ${WordpressVersion}.zip
@@ -176,9 +246,16 @@ Resources:
                     sed -i "s/'username_here'/'${DBUser}'/g" wp-config.php
                     sed -i "s/'password_here'/'${DBPassword}'/g" wp-config.php
                     sed -i "s/'localhost'/'${DBInstance.Endpoint.Address}'/g" wp-config.php
-                    systemctl enable httpd
-                    systemctl start httpd
-                    cfn-signal -e $? --stack '${AWS::StackName}' --region ${AWS::Region} --resource 'AppAsg'
+                    EFS=$(aws efs describe-mount-targets --file-system-id ${FileSystem} --region ${AWS::Region} | jq '.MountTargets[].IpAddress' | tr -d '"')
+                    mkdir /tmp/efs/
+                    mount -t nfs4 $EFS:/ /tmp/efs/
+                    rsync -rtv /var/www/html/wp-content/ /tmp/efs/
+                    umount /tmp/efs
+                    mount -t nfs4 $EFS:/ /var/www/html/wp-content/
+                    chown -R apache:root /var/www/html/
+                    chkconfig httpd --add
+                    /etc/init.d/httpd restart
+                    /opt/aws/bin/cfn-signal -e $? --stack '${AWS::StackName}' --region ${AWS::Region} --resource 'AppAsg'
     AppAsg:
         Type: AWS::AutoScaling::AutoScalingGroup
         Properties:
@@ -190,7 +267,7 @@ Resources:
             LoadBalancerNames:
                 - !Ref AppElb
             HealthCheckType: ELB
-            HealthCheckGracePeriod: 9000
+            HealthCheckGracePeriod: 900
         CreationPolicy:
             ResourceSignal:
                 Count: !Ref AppAsgDesiredCapacity
