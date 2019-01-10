@@ -8,7 +8,7 @@ Parameters:
     Subnets:
         Type: CommaDelimitedList
         Description: The list of subnet IDs in above VPC
-        ConstraintDescription: must be a list of at least two existing subnets associated with     at least two different availability zones
+        ConstraintDescription: must be a list of at least two existing subnets associated with at least two different availability zones
     DBUser:
         Description: The WordPress database admin account username
         Type: String
